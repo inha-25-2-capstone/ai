@@ -205,6 +205,49 @@ GET /api/stance/{article_id}
 - [ ] Hugging Face Spaces 배포
 - [ ] 프론트엔드 연동
 
+## 브랜치 전략
+
+### 브랜치 구조
+```
+main (프로덕션)
+  ↑
+  └─ develop (개발)
+       ↑
+       └─ feature/* (기능 개발)
+       └─ fix/* (버그 수정)
+```
+
+### 개발 워크플로우
+1. **새 기능 개발**
+   ```bash
+   git checkout develop
+   git checkout -b feature/기능-이름
+   # 개발 후
+   git push -u origin feature/기능-이름
+   # develop으로 PR 생성
+   ```
+
+2. **버그 수정**
+   ```bash
+   git checkout develop
+   git checkout -b fix/버그-이름
+   # 수정 후 PR 생성
+   ```
+
+3. **배포** (develop → main)
+   ```bash
+   # develop이 안정화되면 main으로 PR 생성
+   ```
+
+### 커밋 메시지 규칙
+- `feat`: 새 기능 추가
+- `fix`: 버그 수정
+- `docs`: 문서 수정
+- `style`: 코드 포맷팅
+- `refactor`: 리팩토링
+- `test`: 테스트 추가/수정
+- `ci`: CI 설정 변경
+
 ## 주요 용어
 
 - **토픽**: 같은 정치 이슈를 다루는 기사 묶음 (하루 7개)
