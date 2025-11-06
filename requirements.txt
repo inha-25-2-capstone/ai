@@ -1,0 +1,26 @@
+# FastAPI & Web
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.23
+
+# AI/ML
+torch==2.1.0
+transformers==4.35.0
+kobert-transformers==0.5.1
+sentencepiece==0.1.99
+
+# Data Processing (Python 3.8 호환 버전)
+pandas==2.0.3
+numpy==1.24.3
+
+# Utils
+python-dotenv==1.0.0
+requests==2.31.0
+
+# Development
+pytest==7.4.3
