@@ -1,0 +1,86 @@
+name: AI Server CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Check Python syntax
+      run: |
+        python -m py_compile main.py
+        python -m py_compile app/**/*.py
+
+    - name: Test server startup
+      run: |
+        # 서버가 정상적으로 시작되는지 테스트
+        timeout 10s python main.py || code=$?; if [[ $code -ne 124 ]]; then exit $code; fi
+      env:
+        CORS_ORIGINS: "*"
+
+    - name: Run tests (if available)
+      run: |
+        if [ -d "tests" ]; then
+          pytest tests/ -v
+        else
+          echo "No tests found. Skipping test execution."
+        fi
+      continue-on-error: true
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install linting tools
+      run: |
+        pip install flake8 black
+
+    - name: Check code formatting with black
+      run: |
+        black --check app/ main.py || echo "Code formatting check failed. Run 'black app/ main.py' to fix."
+      continue-on-error: true
+
+    - name: Lint with flake8
+      run: |
+        # F401: imported but unused (너무 엄격할 수 있어서 경고만)
+        # E501: line too long (80자 제한 완화)
+        flake8 app/ main.py --count --max-line-length=120 --statistics
+      continue-on-error: true

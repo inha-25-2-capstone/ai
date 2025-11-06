@@ -1,5 +1,7 @@
 # AI 기반 객관적 뉴스 추천 서비스 - AI 파트
 
+[![CI](https://github.com/inha-25-2-capstone/ai/actions/workflows/ci.yml/badge.svg)](https://github.com/inha-25-2-capstone/ai/actions/workflows/ci.yml)
+
 국내 정치 뉴스의 언론사별 편향성을 극복하고, 같은 이슈에 대해 옹호/중립/비판의 다양한 관점을 제공하는 AI 기반 뉴스 스탠스 분석 시스템
 
 ## 주요 기능
