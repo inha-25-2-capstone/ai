@@ -3,24 +3,21 @@ AI 기반 객관적 뉴스 추천 서비스 - AI 파트
 FastAPI 애플리케이션 메인 파일
 """
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 import logging
 import os
-from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
-from app.api import router, init_stance_service
-from app.database import engine, Base
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api import init_stance_service, router
 
 # 환경 변수 로드
 load_dotenv()
 
 # 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +35,7 @@ async def lifespan(app: FastAPI):
     #     logger.info("Database tables created")
 
     # 스탠스 분석 모델 초기화
-    model_path = os.getenv('MODEL_PATH', None)
+    model_path = os.getenv("MODEL_PATH", None)
     init_stance_service(model_path=model_path)
     logger.info("Stance service initialized")
 
@@ -53,7 +50,7 @@ app = FastAPI(
     title="AI News Stance Analysis API",
     description="AI 기반 뉴스 스탠스 분석 서비스 (옹호/중립/비판 분류)",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS 설정
@@ -81,8 +78,8 @@ async def root():
             "analyze": "/api/analyze",
             "batch_analyze": "/api/analyze/batch",
             "topic_analyze": "/api/analyze/topic",
-            "docs": "/docs"
-        }
+            "docs": "/docs",
+        },
     }
 
 
@@ -95,10 +92,4 @@ if __name__ == "__main__":
 
     logger.info(f"Starting server on {host}:{port}")
 
-    uvicorn.run(
-        "main:app",
-        host=host,
-        port=port,
-        reload=True,  # 개발 모드에서만 True
-        log_level="info"
-    )
+    uvicorn.run("main:app", host=host, port=port, reload=True, log_level="info")  # 개발 모드에서만 True

@@ -1,4 +1,4 @@
-from .routes import router, init_stance_service
 from . import schemas
+from .routes import init_stance_service, router
 
-__all__ = ['router', 'init_stance_service', 'schemas']
+__all__ = ["router", "init_stance_service", "schemas"]

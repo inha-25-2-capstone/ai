@@ -1,0 +1,40 @@
+[flake8]
+# 최대 라인 길이
+max-line-length = 120
+
+# 무시할 에러 코드
+extend-ignore =
+    # W503: line break before binary operator (black과 충돌)
+    W503,
+    # E203: whitespace before ':' (black과 충돌)
+    E203,
+    # E501: line too long (max-line-length로 관리)
+    # E701: multiple statements on one line (black이 처리)
+
+# 제외할 디렉토리
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    build,
+    dist,
+    *.egg-info,
+    .mypy_cache,
+    .pytest_cache,
+    .tox,
+    notebooks,
+    scripts,
+    data
+
+# 파일당 최대 복잡도 (McCabe complexity)
+max-complexity = 10
+
+# 통계 출력
+count = True
+statistics = True
+show-source = True
+
+# 포맷
+format = default
