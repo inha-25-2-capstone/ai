@@ -3,9 +3,10 @@
 뉴스 기사의 스탠스를 분석하는 비즈니스 로직
 """
 
-from app.models import StancePredictor
 import logging
 import os
+
+from app.models import StancePredictor
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +50,11 @@ class StanceService:
             if self.predictor is None:
                 logger.warning("Model not loaded. Returning dummy response.")
                 return {
-                    'stance': '중립',
-                    'stance_id': 1,
-                    'confidence': 0.33,
-                    'probabilities': {
-                        '옹호': 0.33,
-                        '중립': 0.34,
-                        '비판': 0.33
-                    },
-                    'note': 'Model not trained yet. This is a dummy response.'
+                    "stance": "중립",
+                    "stance_id": 1,
+                    "confidence": 0.33,
+                    "probabilities": {"옹호": 0.33, "중립": 0.34, "비판": 0.33},
+                    "note": "Model not trained yet. This is a dummy response.",
                 }
 
             result = self.predictor.predict(article_text)
@@ -82,7 +79,7 @@ class StanceService:
         try:
             # 기사 텍스트 추출
             if isinstance(articles[0], dict):
-                texts = [article.get('content', '') or article.get('text', '') for article in articles]
+                texts = [article.get("content", "") or article.get("text", "") for article in articles]
             else:
                 texts = articles
 
@@ -95,15 +92,11 @@ class StanceService:
                 logger.warning("Model not loaded. Returning dummy responses.")
                 return [
                     {
-                        'stance': '중립',
-                        'stance_id': 1,
-                        'confidence': 0.33,
-                        'probabilities': {
-                            '옹호': 0.33,
-                            '중립': 0.34,
-                            '비판': 0.33
-                        },
-                        'note': 'Model not trained yet. This is a dummy response.'
+                        "stance": "중립",
+                        "stance_id": 1,
+                        "confidence": 0.33,
+                        "probabilities": {"옹호": 0.33, "중립": 0.34, "비판": 0.33},
+                        "note": "Model not trained yet. This is a dummy response.",
                     }
                     for _ in texts
                 ]
@@ -143,32 +136,24 @@ class StanceService:
             }
         """
         try:
-            topic_id = topic_articles['topic_id']
-            articles = topic_articles['articles']
+            topic_id = topic_articles["topic_id"]
+            articles = topic_articles["articles"]
 
             # 스탠스 분석
             stance_results = self.analyze_articles_batch(articles)
 
             # 스탠스별로 기사 그룹화
-            articles_by_stance = {
-                '옹호': [],
-                '중립': [],
-                '비판': []
-            }
+            articles_by_stance = {"옹호": [], "중립": [], "비판": []}
 
-            stance_distribution = {
-                '옹호': 0,
-                '중립': 0,
-                '비판': 0
-            }
+            stance_distribution = {"옹호": 0, "중립": 0, "비판": 0}
 
             for i, (article, stance_result) in enumerate(zip(articles, stance_results)):
-                stance = stance_result['stance']
+                stance = stance_result["stance"]
                 article_with_stance = {
                     **article,
-                    'stance': stance,
-                    'stance_id': stance_result['stance_id'],
-                    'confidence': stance_result['confidence']
+                    "stance": stance,
+                    "stance_id": stance_result["stance_id"],
+                    "confidence": stance_result["confidence"],
                 }
 
                 articles_by_stance[stance].append(article_with_stance)
@@ -177,9 +162,9 @@ class StanceService:
             logger.info(f"Topic {topic_id} analyzed: {stance_distribution}")
 
             return {
-                'topic_id': topic_id,
-                'articles_by_stance': articles_by_stance,
-                'stance_distribution': stance_distribution
+                "topic_id": topic_id,
+                "articles_by_stance": articles_by_stance,
+                "stance_distribution": stance_distribution,
             }
 
         except Exception as e:
@@ -203,7 +188,7 @@ class StanceService:
             }
         """
         try:
-            articles_by_stance = topic_analysis['articles_by_stance']
+            articles_by_stance = topic_analysis["articles_by_stance"]
 
             # 대표 기사 찾기
             representative_article = None
@@ -211,7 +196,10 @@ class StanceService:
 
             for stance, articles in articles_by_stance.items():
                 for article in articles:
-                    if article.get('id') == representative_article_id or article.get('article_id') == representative_article_id:
+                    if (
+                        article.get("id") == representative_article_id
+                        or article.get("article_id") == representative_article_id
+                    ):
                         representative_article = article
                         representative_stance = stance
                         break
@@ -223,10 +211,10 @@ class StanceService:
 
             # 다양한 관점의 기사 선정
             result = {
-                'representative_article': representative_article,
-                'support_articles': articles_by_stance['옹호'],
-                'neutral_articles': articles_by_stance['중립'],
-                'oppose_articles': articles_by_stance['비판']
+                "representative_article": representative_article,
+                "support_articles": articles_by_stance["옹호"],
+                "neutral_articles": articles_by_stance["중립"],
+                "oppose_articles": articles_by_stance["비판"],
             }
 
             # 대표 기사와 같은 스탠스의 경우 대표 기사 제외
@@ -234,8 +222,9 @@ class StanceService:
                 stance_key = f"{representative_stance.lower()}_articles"
                 if stance_key in result:
                     result[stance_key] = [
-                        a for a in result[stance_key]
-                        if a.get('id') != representative_article_id and a.get('article_id') != representative_article_id
+                        a
+                        for a in result[stance_key]
+                        if a.get("id") != representative_article_id and a.get("article_id") != representative_article_id
                     ]
 
             return result
