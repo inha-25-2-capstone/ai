@@ -2,6 +2,18 @@
 
 이 디렉토리에는 뉴스 데이터 수집과 검증을 위한 유틸리티 스크립트가 포함되어 있습니다.
 
+## 🚀 설치
+
+스크립트 실행 전, 필요한 의존성을 설치하세요:
+
+```bash
+# 자동 라벨링 스크립트용 의존성 (LLM API 포함)
+pip install -r requirements-scripts.txt
+```
+
+**참고**: `auto_labeling.py`와 `review_labels.py`는 OpenAI와 Google Gemini API를 사용합니다.
+다른 스크립트는 기본 `requirements.txt`만으로 실행 가능합니다.
+
 ## 📁 파일 목록
 
 ### 1. collect_news.py
