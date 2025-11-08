@@ -12,8 +12,6 @@ try:
 
     KOBERT_AVAILABLE = True
 except ImportError:
-    from transformers import BertTokenizer
-
     KOBERT_AVAILABLE = False
 
 

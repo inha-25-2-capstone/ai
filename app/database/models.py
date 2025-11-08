@@ -120,7 +120,10 @@ class StanceAnalysis(Base):
     article = relationship("Article", back_populates="stance_analysis")
 
     def __repr__(self):
-        return f"<StanceAnalysis(article_id={self.article_id}, stance='{self.final_stance}', confidence={self.confidence_score})>"
+        return (
+            f"<StanceAnalysis(article_id={self.article_id}, "
+            f"stance='{self.final_stance}', confidence={self.confidence_score})>"
+        )
 
 
 class RecommendedArticle(Base):

@@ -12,7 +12,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import init_stance_service, router
-from app.database import Base, engine
 
 # 환경 변수 로드
 load_dotenv()

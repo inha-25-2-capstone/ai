@@ -47,10 +47,11 @@ jobs:
       run: |
         # E501: line too long (120자로 완화)
         # W503: line break before binary operator (black 스타일과 충돌)
+        # E203: whitespace before ':' (black 스타일과 충돌)
         flake8 app/ main.py \
           --count \
           --max-line-length=120 \
-          --extend-ignore=W503 \
+          --extend-ignore=W503,E203 \
           --statistics \
           --show-source
       continue-on-error: false
