@@ -1,0 +1,26 @@
+# 개발 및 CI/CD용 의존성
+
+# 기본 의존성 포함
+-r requirements.txt
+
+# 코드 품질 도구
+black==23.11.0          # 코드 포맷터
+isort==5.12.0           # import 정렬
+flake8==6.1.0           # 린터
+mypy==1.7.1             # 타입 체커
+pylint==3.0.3           # 더 엄격한 린터 (선택)
+
+# 보안 검사
+bandit==1.7.5           # 보안 취약점 스캔
+safety==2.3.5           # 의존성 보안 체크
+
+# 테스트
+pytest==7.4.3           # 테스트 프레임워크
+pytest-cov==4.1.0       # 커버리지 측정
+pytest-asyncio==0.21.1  # 비동기 테스트
+pytest-mock==3.12.0     # 목킹
+httpx==0.25.2           # FastAPI 테스트용 HTTP 클라이언트
+
+# 문서
+mkdocs==1.5.3           # 문서 생성 (선택)
+mkdocs-material==9.5.3  # Material 테마 (선택)
