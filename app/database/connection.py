@@ -2,12 +2,13 @@
 데이터베이스 연결 설정
 """
 
+import logging
+import os
+
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
-import os
-import logging
-from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +16,18 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # 데이터베이스 URL 가져오기
-DATABASE_URL = os.getenv('DATABASE_URL')
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = None
 SessionLocal = None
 
 if not DATABASE_URL:
     # 개별 환경 변수로 URL 구성
-    DB_USER = os.getenv('DB_USER')
-    DB_PASSWORD = os.getenv('DB_PASSWORD')
-    DB_HOST = os.getenv('DB_HOST', 'localhost')
-    DB_PORT = os.getenv('DB_PORT', '5432')
-    DB_NAME = os.getenv('DB_NAME')
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = os.getenv("DB_PORT", "5432")
+    DB_NAME = os.getenv("DB_NAME")
 
     if all([DB_USER, DB_PASSWORD, DB_NAME]):
         DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
@@ -41,7 +42,7 @@ if DATABASE_URL:
             pool_size=5,
             max_overflow=10,
             pool_pre_ping=True,
-            echo=False  # 개발 시 True로 설정하면 SQL 쿼리 로그 출력
+            echo=False,  # 개발 시 True로 설정하면 SQL 쿼리 로그 출력
         )
 
         # 세션 팩토리 생성

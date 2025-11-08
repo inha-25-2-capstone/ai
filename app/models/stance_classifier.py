@@ -6,11 +6,12 @@ KoBERT를 사용하여 뉴스 기사를 옹호/중립/비판으로 분류
 import torch
 import torch.nn as nn
 from transformers import BertModel
+
 try:
     from kobert_transformers import get_tokenizer
+
     KOBERT_AVAILABLE = True
 except ImportError:
-    from transformers import BertTokenizer
     KOBERT_AVAILABLE = False
 
 
@@ -26,7 +27,7 @@ class StanceClassifier(nn.Module):
 
     def __init__(self, n_classes=3, dropout=0.3):
         super(StanceClassifier, self).__init__()
-        self.bert = BertModel.from_pretrained('skt/kobert-base-v1')
+        self.bert = BertModel.from_pretrained("skt/kobert-base-v1")
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(self.bert.config.hidden_size, n_classes)
 
@@ -41,10 +42,7 @@ class StanceClassifier(nn.Module):
         Returns:
             logits: 클래스별 예측 점수
         """
-        outputs = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask
-        )
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
 
         # [CLS] 토큰의 출력 사용
         pooled_output = outputs.pooler_output
@@ -57,11 +55,7 @@ class StanceClassifier(nn.Module):
 class StancePredictor:
     """스탠스 예측기"""
 
-    STANCE_LABELS = {
-        0: "옹호",
-        1: "중립",
-        2: "비판"
-    }
+    STANCE_LABELS = {0: "옹호", 1: "중립", 2: "비판"}
 
     def __init__(self, model_path=None, device=None):
         """
@@ -71,14 +65,15 @@ class StancePredictor:
             model_path: 학습된 모델 경로 (None이면 새 모델)
             device: 사용할 디바이스 (None이면 자동 선택)
         """
-        self.device = device if device else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # KoBERT 토크나이저 로드
         if KOBERT_AVAILABLE:
             self.tokenizer = get_tokenizer()
         else:
             from transformers import BertTokenizer
-            self.tokenizer = BertTokenizer.from_pretrained('skt/kobert-base-v1')
+
+            self.tokenizer = BertTokenizer.from_pretrained("skt/kobert-base-v1")
 
         self.model = StanceClassifier()
 
@@ -108,14 +103,14 @@ class StancePredictor:
             text,
             add_special_tokens=True,
             max_length=max_length,
-            padding='max_length',
+            padding="max_length",
             truncation=True,
             return_attention_mask=True,
-            return_tensors='pt'
+            return_tensors="pt",
         )
 
-        input_ids = encoding['input_ids'].to(self.device)
-        attention_mask = encoding['attention_mask'].to(self.device)
+        input_ids = encoding["input_ids"].to(self.device)
+        attention_mask = encoding["attention_mask"].to(self.device)
 
         # 예측
         with torch.no_grad():
@@ -127,13 +122,12 @@ class StancePredictor:
         confidence = confidence.item()
 
         return {
-            'stance': self.STANCE_LABELS[predicted_class],
-            'stance_id': predicted_class,
-            'confidence': round(confidence, 4),
-            'probabilities': {
-                self.STANCE_LABELS[i]: round(prob, 4)
-                for i, prob in enumerate(probabilities[0].tolist())
-            }
+            "stance": self.STANCE_LABELS[predicted_class],
+            "stance_id": predicted_class,
+            "confidence": round(confidence, 4),
+            "probabilities": {
+                self.STANCE_LABELS[i]: round(prob, 4) for i, prob in enumerate(probabilities[0].tolist())
+            },
         }
 
     def predict_batch(self, texts, max_length=512, batch_size=16):
@@ -151,21 +145,21 @@ class StancePredictor:
         results = []
 
         for i in range(0, len(texts), batch_size):
-            batch_texts = texts[i:i + batch_size]
+            batch_texts = texts[i : i + batch_size]
 
             # 배치 토큰화
             encodings = self.tokenizer.batch_encode_plus(
                 batch_texts,
                 add_special_tokens=True,
                 max_length=max_length,
-                padding='max_length',
+                padding="max_length",
                 truncation=True,
                 return_attention_mask=True,
-                return_tensors='pt'
+                return_tensors="pt",
             )
 
-            input_ids = encodings['input_ids'].to(self.device)
-            attention_mask = encodings['attention_mask'].to(self.device)
+            input_ids = encodings["input_ids"].to(self.device)
+            attention_mask = encodings["attention_mask"].to(self.device)
 
             # 예측
             with torch.no_grad():
@@ -178,14 +172,15 @@ class StancePredictor:
                 predicted_class = predicted_classes[j].item()
                 confidence = confidences[j].item()
 
-                results.append({
-                    'stance': self.STANCE_LABELS[predicted_class],
-                    'stance_id': predicted_class,
-                    'confidence': round(confidence, 4),
-                    'probabilities': {
-                        self.STANCE_LABELS[k]: round(prob, 4)
-                        for k, prob in enumerate(probabilities[j].tolist())
+                results.append(
+                    {
+                        "stance": self.STANCE_LABELS[predicted_class],
+                        "stance_id": predicted_class,
+                        "confidence": round(confidence, 4),
+                        "probabilities": {
+                            self.STANCE_LABELS[k]: round(prob, 4) for k, prob in enumerate(probabilities[j].tolist())
+                        },
                     }
-                })
+                )
 
         return results
