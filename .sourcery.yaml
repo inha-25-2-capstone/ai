@@ -1,0 +1,73 @@
+# Sourcery 설정 파일
+# Python 코드 품질 자동 개선
+
+# Python 버전
+python_version: "3.10"
+
+# 규칙 설정
+rules:
+  # 리팩토링 제안 활성화
+  - id: refactoring-merge-nested-ifs
+    description: 중첩된 if문 병합
+    enabled: true
+
+  - id: refactoring-simplify-boolean-comparison
+    description: 불필요한 boolean 비교 단순화
+    enabled: true
+
+  - id: refactoring-use-fstring-formatting
+    description: f-string 사용 권장
+    enabled: true
+
+  - id: refactoring-use-named-expression
+    description: walrus operator (:=) 사용 권장
+    enabled: true
+
+  - id: refactoring-merge-duplicate-blocks
+    description: 중복 코드 블록 병합
+    enabled: true
+
+# 제외할 경로
+ignore:
+  - "notebooks/**"
+  - "data/**"
+  - "scripts/**"
+  - "**/test_*.py"
+  - "**/__pycache__/**"
+  - ".venv/**"
+  - "venv/**"
+
+# GitHub 통합 설정
+github:
+  # PR에 리뷰 코멘트 달기
+  request_review: true
+
+  # 코드 제안 추가
+  sourcery_branch: true
+
+# 리뷰 설정
+refactor:
+  # 복잡도 임계값 (10 이상이면 경고)
+  max_complexity: 10
+
+  # 함수 길이 임계값 (50줄 이상이면 경고)
+  max_function_length: 50
+
+  # 최소 품질 점수 (0-100, 낮으면 경고)
+  min_quality_score: 70
+
+# 자동 수정 설정
+auto_refactor:
+  # 안전한 리팩토링만 자동 적용
+  enabled: false  # true로 하면 자동 커밋됨 (주의!)
+
+# 메트릭 설정
+metrics:
+  # 품질 점수 표시
+  quality_score: true
+
+  # 복잡도 측정
+  cyclomatic_complexity: true
+
+  # 코드 중복도
+  working_memory: true
