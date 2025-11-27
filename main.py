@@ -35,8 +35,10 @@ async def lifespan(app: FastAPI):
     #     logger.info("Database tables created")
 
     # 스탠스 분석 모델 초기화
+    # HuggingFace Hub repo_id 우선, 없으면 로컬 model_path 사용
+    repo_id = os.getenv("HF_REPO_ID", None)
     model_path = os.getenv("MODEL_PATH", None)
-    init_stance_service(model_path=model_path)
+    init_stance_service(model_path=model_path, repo_id=repo_id)
     logger.info("Stance service initialized")
 
     yield

@@ -40,10 +40,10 @@ def get_stance_service():
     return stance_service
 
 
-def init_stance_service(model_path=None):
+def init_stance_service(model_path=None, repo_id=None):
     """StanceService 초기화"""
     global stance_service
-    stance_service = StanceService(model_path=model_path)
+    stance_service = StanceService(model_path=model_path, repo_id=repo_id)
     logger.info("StanceService initialized in routes")
 
 

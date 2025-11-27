@@ -14,23 +14,30 @@ logger = logging.getLogger(__name__)
 class StanceService:
     """스탠스 분석 서비스"""
 
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, repo_id=None):
         """
         초기화
 
         Args:
-            model_path: 학습된 모델 경로 (None이면 새 모델 사용)
+            model_path: 학습된 모델 경로 (로컬 파일)
+            repo_id: HuggingFace Hub 레포지토리 ID (예: "gaaahee/political-news-stance-classifier")
         """
-        # 모델 파일이 없으면 초기화하지 않음 (학습 전)
-        if model_path and os.path.exists(model_path):
+        # HuggingFace Hub에서 모델 로드
+        if repo_id:
+            self.predictor = StancePredictor(repo_id=repo_id)
+            logger.info(f"StanceService initialized from HuggingFace Hub: {repo_id}")
+            logger.info(f"Device: {self.predictor.device}")
+        # 로컬 모델 파일에서 로드
+        elif model_path and os.path.exists(model_path):
             self.predictor = StancePredictor(model_path=model_path)
-            logger.info(f"StanceService initialized with device: {self.predictor.device}")
+            logger.info(f"StanceService initialized from local model: {model_path}")
+            logger.info(f"Device: {self.predictor.device}")
         else:
             self.predictor = None
             if model_path:
                 logger.warning(f"Model file not found at {model_path}. Service will run in no-model mode.")
             else:
-                logger.warning("No model path provided. Service will run in no-model mode.")
+                logger.warning("No model path or repo_id provided. Service will run in no-model mode.")
 
     def analyze_article(self, article_text):
         """
