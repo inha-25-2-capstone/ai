@@ -5,7 +5,6 @@ KoBERT를 사용하여 뉴스 기사를 옹호/중립/비판으로 분류
 
 import json
 import logging
-import os
 
 import torch
 import torch.nn as nn
