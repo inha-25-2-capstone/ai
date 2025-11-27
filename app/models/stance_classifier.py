@@ -80,8 +80,7 @@ class StancePredictor:
 
         # 모델 초기화
         self.model = StanceClassifier(
-            n_classes=self.config.get("num_labels", 3),
-            dropout=self.config.get("dropout", 0.3)
+            n_classes=self.config.get("num_labels", 3), dropout=self.config.get("dropout", 0.3)
         )
 
         if model_path:
