@@ -70,3 +70,9 @@ htmlcov/
 
 # Hugging Face 캐시
 .cache/
+
+# HuggingFace 업로드 임시 파일
+hf_upload_temp/
+
+# Windows crash dump
+*.stackdump
