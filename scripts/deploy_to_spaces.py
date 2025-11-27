@@ -17,7 +17,7 @@ def deploy_to_spaces():
         return False
 
     # Spaces 설정
-    space_id = "gaaahee/news-stance-detection"
+    space_id = "gaaahee/political-stance-api"
     spaces_dir = os.path.join(os.path.dirname(__file__), "..", "spaces")
 
     api = HfApi(token=token)
