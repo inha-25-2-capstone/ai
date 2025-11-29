@@ -3,16 +3,15 @@
 KoBERT를 사용하여 뉴스 기사를 옹호/중립/비판으로 분류
 """
 
+import json
+import logging
+
 import torch
 import torch.nn as nn
-from transformers import BertModel
+from huggingface_hub import hf_hub_download
+from transformers import AutoTokenizer, BertModel
 
-try:
-    from kobert_transformers import get_tokenizer
-
-    KOBERT_AVAILABLE = True
-except ImportError:
-    KOBERT_AVAILABLE = False
+logger = logging.getLogger(__name__)
 
 
 class StanceClassifier(nn.Module):
@@ -57,31 +56,57 @@ class StancePredictor:
 
     STANCE_LABELS = {0: "옹호", 1: "중립", 2: "비판"}
 
-    def __init__(self, model_path=None, device=None):
+    def __init__(self, model_path=None, repo_id=None, device=None):
         """
         초기화
 
         Args:
-            model_path: 학습된 모델 경로 (None이면 새 모델)
+            model_path: 학습된 모델 경로 (로컬 파일)
+            repo_id: HuggingFace Hub 레포지토리 ID (예: "gaaahee/political-news-stance-classifier")
             device: 사용할 디바이스 (None이면 자동 선택)
         """
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.config = {}
 
-        # KoBERT 토크나이저 로드
-        if KOBERT_AVAILABLE:
-            self.tokenizer = get_tokenizer()
-        else:
-            from transformers import BertTokenizer
+        # HuggingFace Hub에서 모델 로드
+        if repo_id:
+            model_path = self._load_from_hub(repo_id)
 
-            self.tokenizer = BertTokenizer.from_pretrained("skt/kobert-base-v1")
+        # 토크나이저 로드 (monologg/kobert 사용 - 학습 시 사용한 토크나이저)
+        tokenizer_name = self.config.get("tokenizer", "monologg/kobert")
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, trust_remote_code=True)
+        logger.info(f"Tokenizer loaded: {tokenizer_name}")
 
-        self.model = StanceClassifier()
+        # 모델 초기화
+        self.model = StanceClassifier(
+            n_classes=self.config.get("num_labels", 3), dropout=self.config.get("dropout", 0.3)
+        )
 
         if model_path:
             self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            logger.info(f"Model loaded from: {model_path}")
 
         self.model.to(self.device)
         self.model.eval()
+
+    def _load_from_hub(self, repo_id: str) -> str:
+        """HuggingFace Hub에서 모델 파일 다운로드"""
+        logger.info(f"Loading model from HuggingFace Hub: {repo_id}")
+
+        # config.json 다운로드
+        try:
+            config_path = hf_hub_download(repo_id, "config.json")
+            with open(config_path, "r", encoding="utf-8") as f:
+                self.config = json.load(f)
+            logger.info("Config loaded from Hub")
+        except Exception as e:
+            logger.warning(f"Could not load config.json: {e}")
+
+        # model.pth 다운로드
+        model_path = hf_hub_download(repo_id, "model.pth")
+        logger.info(f"Model downloaded to: {model_path}")
+
+        return model_path
 
     def predict(self, text, max_length=512):
         """
