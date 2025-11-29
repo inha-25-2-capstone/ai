@@ -20,6 +20,7 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
+import wandb
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -69,13 +70,13 @@ class EarlyStopping:
         elif val_loss > self.best_loss - self.min_delta:
             self.counter += 1
             if self.verbose:
-                print(f'⚠️  EarlyStopping counter: {self.counter}/{self.patience}')
+                print(f'[!] EarlyStopping counter: {self.counter}/{self.patience}')
                 print(f'   현재 Val Loss: {val_loss:.4f}, 최고 Val Loss: {self.best_loss:.4f}')
 
             if self.counter >= self.patience:
                 self.early_stop = True
                 if self.verbose:
-                    print(f'\n🛑 Early Stopping! {self.patience} epoch 동안 개선 없음')
+                    print(f'\n[STOP] Early Stopping! {self.patience} epoch 동안 개선 없음')
 
         else:
             self.save_checkpoint(val_loss, model)
@@ -85,9 +86,9 @@ class EarlyStopping:
         """최고 성능 모델 저장"""
         if self.verbose:
             if self.best_loss is not None:
-                print(f'✅ Val Loss 개선: {self.best_loss:.4f} → {val_loss:.4f}')
+                print(f'[OK] Val Loss 개선: {self.best_loss:.4f} -> {val_loss:.4f}')
             else:
-                print(f'✅ 최초 모델 저장 (Val Loss: {val_loss:.4f})')
+                print(f'[OK] 최초 모델 저장 (Val Loss: {val_loss:.4f})')
 
         self.best_loss = val_loss
         # 모델 state dict 저장 (메모리에)
@@ -103,7 +104,7 @@ class EarlyStopping:
                  for key, value in self.best_model_state.items()}
             )
             if self.verbose:
-                print(f'✅ 최고 성능 모델 로드 완료 (Val Loss: {self.best_loss:.4f})')
+                print(f'[OK] 최고 성능 모델 로드 완료 (Val Loss: {self.best_loss:.4f})')
         return model
 
 
@@ -303,6 +304,27 @@ def get_predictions(model, data_loader, device):
 
 
 def main(args):
+    # wandb 초기화
+    if args.use_wandb:
+        wandb.init(
+            project=args.wandb_project,
+            name=args.wandb_run_name,
+            config={
+                "model_name": args.model_name,
+                "max_length": args.max_length,
+                "batch_size": args.batch_size,
+                "learning_rate": args.learning_rate,
+                "epochs": args.epochs,
+                "dropout": args.dropout,
+                "weight_decay": args.weight_decay,
+                "max_grad_norm": args.max_grad_norm,
+                "early_stop_patience": args.early_stop_patience,
+                "use_focal_loss": args.use_focal_loss,
+                "focal_gamma": args.focal_gamma,
+            }
+        )
+        print(f"\n[wandb] 초기화 완료: {wandb.run.url}")
+
     # 디바이스 설정
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"\n{'='*60}")
@@ -340,21 +362,25 @@ def main(args):
         tokenizer = AutoTokenizer.from_pretrained('monologg/kobert')
     print(f"Vocab 크기: {len(tokenizer)}")
 
+    # 텍스트 컬럼 자동 감지 (text 또는 content)
+    text_col = 'text' if 'text' in train_df.columns else 'content'
+    print(f"텍스트 컬럼: {text_col}")
+
     # Dataset 생성
     train_dataset = StanceDataset(
-        train_df['text'].values,
+        train_df[text_col].values,
         train_df['label'].values,
         tokenizer,
         args.max_length
     )
     val_dataset = StanceDataset(
-        val_df['text'].values,
+        val_df[text_col].values,
         val_df['label'].values,
         tokenizer,
         args.max_length
     )
     test_dataset = StanceDataset(
-        test_df['text'].values,
+        test_df[text_col].values,
         test_df['label'].values,
         tokenizer,
         args.max_length
@@ -402,7 +428,6 @@ def main(args):
         mode='min',        # validation loss를 최소화
         factor=0.5,        # LR을 절반으로
         patience=2,        # 2 epoch 동안 개선 없으면 LR 감소
-        verbose=True,
         min_lr=1e-7        # 최소 learning rate
     )
 
@@ -445,14 +470,14 @@ def main(args):
 
         # 현재 Learning Rate 출력
         current_lr = optimizer.param_groups[0]['lr']
-        print(f"📊 Current Learning Rate: {current_lr:.2e}")
+        print(f"[LR] Current Learning Rate: {current_lr:.2e}")
 
         # 학습
         train_loss, train_acc = train_epoch(
             model, train_loader, criterion, optimizer, device, epoch + 1,
             max_grad_norm=args.max_grad_norm
         )
-        print(f"\n📊 Train Loss: {train_loss:.4f}, Train Acc: {train_acc*100:.2f}%")
+        print(f"\n[Train] Loss: {train_loss:.4f}, Acc: {train_acc*100:.2f}%")
 
         # 검증
         val_loss, val_acc = eval_model(model, val_loader, criterion, device, 'Validating')
@@ -462,7 +487,7 @@ def main(args):
         from sklearn.metrics import f1_score
         val_f1_macro = f1_score(val_true, val_preds, average='macro')
 
-        print(f"📊 Val Loss: {val_loss:.4f}, Val Acc: {val_acc*100:.2f}%, Val F1 (macro): {val_f1_macro:.4f}")
+        print(f"[Val] Loss: {val_loss:.4f}, Acc: {val_acc*100:.2f}%, F1 (macro): {val_f1_macro:.4f}")
 
         # 학습률 스케줄러 업데이트 (Val Loss 기준으로 변경)
         scheduler.step(val_loss)
@@ -474,18 +499,30 @@ def main(args):
         history['val_acc'].append(val_acc)
         history['learning_rates'].append(current_lr)
 
+        # wandb 로깅
+        if args.use_wandb:
+            wandb.log({
+                "epoch": epoch + 1,
+                "train_loss": train_loss,
+                "train_acc": train_acc,
+                "val_loss": val_loss,
+                "val_acc": val_acc,
+                "val_f1_macro": val_f1_macro,
+                "learning_rate": current_lr,
+            })
+
         # 최고 F1 성능 추적
         if val_f1_macro > best_val_f1:
             best_val_f1 = val_f1_macro
             best_epoch = epoch + 1
-            print(f"✨ 새로운 최고 검증 F1: {best_val_f1:.4f}")
+            print(f"[BEST] 새로운 최고 검증 F1: {best_val_f1:.4f}")
 
         # Early Stopping 체크 (Val Loss 기준)
         early_stopping(val_loss, model)
 
         if early_stopping.early_stop:
             print(f"\n{'='*60}")
-            print(f"🛑 Early Stopping at Epoch {epoch + 1}")
+            print(f"[STOP] Early Stopping at Epoch {epoch + 1}")
             print(f"{'='*60}")
             break
 
@@ -494,7 +531,7 @@ def main(args):
     print("최고 성능 모델 로드")
     print(f"{'='*60}")
     model = early_stopping.load_best_model(model)
-    print(f"✅ 최고 검증 F1: {best_val_f1:.4f} (Epoch {best_epoch})")
+    print(f"[OK] 최고 검증 F1: {best_val_f1:.4f} (Epoch {best_epoch})")
 
     print(f"\n{'='*60}")
     print("학습 완료!")
@@ -591,6 +628,47 @@ def main(args):
 
     print(f"학습 히스토리 저장 완료: {history_path}")
 
+    # wandb 최종 결과 로깅 및 종료
+    if args.use_wandb:
+        # 최종 테스트 결과 로깅
+        wandb.log({
+            "test_loss": test_loss,
+            "test_acc": test_acc,
+            "best_val_f1_macro": best_val_f1,
+        })
+
+        # Confusion Matrix 이미지 로깅
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(8, 6))
+        im = ax.imshow(cm, cmap='Blues')
+        ax.set_xticks([0, 1, 2])
+        ax.set_yticks([0, 1, 2])
+        ax.set_xticklabels(['Support', 'Neutral', 'Oppose'])
+        ax.set_yticklabels(['Support', 'Neutral', 'Oppose'])
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('Actual')
+        ax.set_title('Confusion Matrix')
+        for i in range(3):
+            for j in range(3):
+                ax.text(j, i, cm[i, j], ha='center', va='center', fontsize=14)
+        plt.colorbar(im)
+        plt.tight_layout()
+        wandb.log({"confusion_matrix": wandb.Image(fig)})
+        plt.close()
+
+        # 모델 아티팩트 저장
+        artifact = wandb.Artifact(
+            name=f"kobert-stance-{timestamp}",
+            type="model",
+            description="KoBERT stance classifier"
+        )
+        artifact.add_file(model_path)
+        artifact.add_file(metadata_path)
+        wandb.log_artifact(artifact)
+
+        wandb.finish()
+        print("\n[wandb] 실험 종료")
+
     print(f"\n{'='*60}")
     print("학습 완료!")
     print(f"{'='*60}\n")
@@ -636,6 +714,14 @@ if __name__ == '__main__':
                         help='Focal Loss 사용 (기본값: Weighted CE)')
     parser.add_argument('--focal_gamma', type=float, default=2.0,
                         help='Focal Loss gamma 값')
+
+    # wandb 관련
+    parser.add_argument('--use_wandb', action='store_true',
+                        help='Weights & Biases 사용 여부')
+    parser.add_argument('--wandb_project', type=str, default='kobert-stance',
+                        help='wandb 프로젝트 이름')
+    parser.add_argument('--wandb_run_name', type=str, default=None,
+                        help='wandb 실험 이름 (미지정 시 자동 생성)')
 
     args = parser.parse_args()
 
