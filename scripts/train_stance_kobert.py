@@ -252,18 +252,48 @@ def main(args):
     )
 
     # 데이터 로드
-    print(f"\n[INFO] Loading data from: {args.data_path}")
+    if args.train_path and args.val_path and args.test_path:
+        # 분리된 파일 사용
+        print(f"\n[INFO] Loading separate datasets:")
+        print(f"  Train: {args.train_path}")
+        print(f"  Val: {args.val_path}")
+        print(f"  Test: {args.test_path}")
 
-    if args.data_path.endswith('.csv'):
-        df = pd.read_csv(args.data_path)
-    elif args.data_path.endswith('.json'):
-        df = pd.read_json(args.data_path)
+        train_df = pd.read_csv(args.train_path)
+        val_df = pd.read_csv(args.val_path)
+        test_df = pd.read_csv(args.test_path)
+
+        # 컬럼 매핑
+        for df in [train_df, val_df, test_df]:
+            if 'text' not in df.columns and 'content' in df.columns:
+                df['text'] = df['content']
+
+        df = pd.concat([train_df, val_df, test_df], ignore_index=True)
+
+    elif args.data_path:
+        # 단일 파일 자동 분할
+        print(f"\n[INFO] Loading data from: {args.data_path}")
+
+        if args.data_path.endswith('.csv'):
+            df = pd.read_csv(args.data_path)
+        elif args.data_path.endswith('.json'):
+            df = pd.read_json(args.data_path)
+        else:
+            raise ValueError("Unsupported file format. Use .csv or .json")
+
+        # 컬럼 확인 및 매핑
+        if 'text' not in df.columns and 'content' in df.columns:
+            df['text'] = df['content']
+
+        # 데이터 분할
+        train_df, test_df = train_test_split(
+            df, test_size=0.1, random_state=args.seed, stratify=df['label']
+        )
+        train_df, val_df = train_test_split(
+            train_df, test_size=0.111, random_state=args.seed, stratify=train_df['label']
+        )  # 0.111 * 0.9 = 0.1 for val
     else:
-        raise ValueError("Unsupported file format. Use .csv or .json")
-
-    # 컬럼 확인 및 매핑
-    if 'text' not in df.columns and 'content' in df.columns:
-        df['text'] = df['content']
+        raise ValueError("Either --data_path or (--train_path, --val_path, --test_path) required")
 
     print(f"[INFO] Total samples: {len(df)}")
     print(f"[INFO] Columns: {df.columns.tolist()}")
@@ -273,14 +303,6 @@ def main(args):
     label_names = ['Support (0)', 'Neutral (1)', 'Oppose (2)']
     for label_id, count in df['label'].value_counts().sort_index().items():
         print(f"  {label_names[label_id]}: {count} ({count/len(df)*100:.1f}%)")
-
-    # 데이터 분할
-    train_df, test_df = train_test_split(
-        df, test_size=0.1, random_state=args.seed, stratify=df['label']
-    )
-    train_df, val_df = train_test_split(
-        train_df, test_size=0.111, random_state=args.seed, stratify=train_df['label']
-    )  # 0.111 * 0.9 = 0.1 for val
 
     print(f"\n[INFO] Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)}")
 
@@ -484,8 +506,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='KoBERT Stance Classification Training')
 
     # 데이터 관련
-    parser.add_argument('--data_path', type=str, required=True,
-                        help='Path to dataset (CSV or JSON)')
+    parser.add_argument('--data_path', type=str, default=None,
+                        help='Path to single dataset (CSV or JSON) - will be auto-split')
+    parser.add_argument('--train_path', type=str, default=None,
+                        help='Path to training dataset')
+    parser.add_argument('--val_path', type=str, default=None,
+                        help='Path to validation dataset')
+    parser.add_argument('--test_path', type=str, default=None,
+                        help='Path to test dataset')
     parser.add_argument('--output_dir', type=str, default='outputs/stance_model',
                         help='Output directory for model and logs')
 
