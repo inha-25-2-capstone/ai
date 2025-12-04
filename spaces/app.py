@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # ==================== 모델 정의 ====================
 
 class StanceClassifier(nn.Module):
-    """KoBERT 기반 스탠스 분류 모델"""
+    """KoBERT 기반 스탠스 분류 모델 (Attention 출력 지원)"""
 
     def __init__(self, n_classes: int = 3, dropout: float = 0.3):
         super(StanceClassifier, self).__init__()
@@ -32,11 +32,19 @@ class StanceClassifier(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(self.bert.config.hidden_size, n_classes)
 
-    def forward(self, input_ids, attention_mask):
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+    def forward(self, input_ids, attention_mask, output_attentions=False):
+        outputs = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            output_attentions=output_attentions
+        )
         pooled_output = outputs.pooler_output
         pooled_output = self.dropout(pooled_output)
-        return self.classifier(pooled_output)
+        logits = self.classifier(pooled_output)
+
+        if output_attentions:
+            return logits, outputs.attentions
+        return logits
 
 
 # ==================== 전역 변수 ====================
@@ -48,6 +56,106 @@ config = {}
 
 STANCE_LABELS = {0: "support", 1: "neutral", 2: "oppose"}
 STANCE_LABELS_KR = {0: "옹호", 1: "중립", 2: "비판"}
+
+# 스탠스 분류 임계값
+STANCE_THRESHOLD = 0.25  # |옹호 - 비판| >= 0.25 이면 옹호/비판, 아니면 중립
+
+
+def classify_stance(support_prob: float, oppose_prob: float) -> tuple:
+    """
+    스탠스 점수 기반 분류
+
+    Args:
+        support_prob: 옹호 확률
+        oppose_prob: 비판 확률
+
+    Returns:
+        (stance_id, stance_score, stance_clarity)
+        - stance_id: 0(옹호), 1(중립), 2(비판)
+        - stance_score: P(옹호) - P(비판), 범위 -1 ~ +1
+        - stance_clarity: |stance_score|, 0에 가까울수록 중립
+    """
+    stance_score = support_prob - oppose_prob
+    stance_clarity = abs(stance_score)
+
+    if stance_score >= STANCE_THRESHOLD:
+        stance_id = 0  # 옹호
+    elif stance_score <= -STANCE_THRESHOLD:
+        stance_id = 2  # 비판
+    else:
+        stance_id = 1  # 중립
+
+    return stance_id, stance_score, stance_clarity
+
+
+def extract_attention_evidence(input_ids, attention_mask, attentions, tokenizer_instance, top_k=5):
+    """
+    Attention 점수에서 주요 단어 추출
+
+    Args:
+        input_ids: 토큰 ID
+        attention_mask: 어텐션 마스크
+        attentions: BERT attention 출력 (12 layers)
+        tokenizer_instance: 토크나이저
+        top_k: 상위 몇 개 단어를 추출할지
+
+    Returns:
+        dict: {
+            'key_words': 주요 단어 리스트,
+            'attention_scores': 각 단어의 attention 점수,
+            'explanation': 설명 문장
+        }
+    """
+    # 마지막 레이어의 attention 사용 (모든 헤드 평균)
+    last_layer_attention = attentions[-1]  # (batch, heads, seq_len, seq_len)
+
+    # [CLS] 토큰이 다른 토큰들에 주는 attention (모든 헤드 평균)
+    cls_attention = last_layer_attention[0, :, 0, :].mean(dim=0)  # (seq_len,)
+
+    # 토큰 가져오기
+    tokens = tokenizer_instance.convert_ids_to_tokens(input_ids[0])
+    actual_length = attention_mask[0].sum().item()
+
+    # 토큰별 attention 점수 (special tokens 제외)
+    token_attention_pairs = []
+    for i in range(1, int(actual_length) - 1):  # [CLS], [SEP] 제외
+        token = tokens[i]
+        score = cls_attention[i].item()
+
+        # 특수 토큰, 짧은 토큰 제외
+        if token in ['[PAD]', '[UNK]', '[CLS]', '[SEP]']:
+            continue
+        if len(token.replace('##', '').replace('▁', '')) < 2:
+            continue
+
+        token_attention_pairs.append((token, score))
+
+    # attention 점수 기준 정렬
+    token_attention_pairs.sort(key=lambda x: x[1], reverse=True)
+
+    # 상위 K개 추출 및 subword 처리
+    key_words = []
+    attention_scores = []
+
+    for token, score in token_attention_pairs[:top_k]:
+        # subword 마커 제거
+        clean_token = token.replace('##', '').replace('▁', '')
+        if clean_token and clean_token not in key_words:
+            key_words.append(clean_token)
+            attention_scores.append(round(score, 4))
+
+    # 설명 생성
+    if key_words:
+        words_str = "', '".join(key_words[:3])
+        explanation = f"모델이 '{words_str}' 등의 표현에 주목하여 판단"
+    else:
+        explanation = "주목할 만한 특정 표현이 감지되지 않음"
+
+    return {
+        'key_words': key_words,
+        'attention_scores': attention_scores,
+        'explanation': explanation
+    }
 
 
 # ==================== 모델 로드 ====================
@@ -134,12 +242,22 @@ class BatchPredictRequest(BaseModel):
     texts: List[str] = Field(..., description="분석할 텍스트 리스트")
 
 
+class EvidenceResponse(BaseModel):
+    key_words: List[str] = Field(..., description="모델이 주목한 주요 단어들")
+    attention_scores: List[float] = Field(..., description="각 단어의 attention 점수")
+    explanation: str = Field(..., description="판단 근거 설명")
+
+
 class PredictResponse(BaseModel):
     stance: str = Field(..., description="스탠스 (support/neutral/oppose)")
     stance_kr: str = Field(..., description="스탠스 한국어 (옹호/중립/비판)")
     stance_id: int = Field(..., description="스탠스 ID (0/1/2)")
-    confidence: float = Field(..., description="신뢰도")
+    confidence: float = Field(..., description="신뢰도 (해당 클래스 확률)")
+    stance_score: float = Field(..., description="스탠스 점수: P(옹호)-P(비판), 범위 -1~+1")
+    stance_clarity: float = Field(..., description="스탠스 명확도: |stance_score|, 0에 가까울수록 중립")
     probabilities: dict = Field(..., description="클래스별 확률")
+    classification_reason: str = Field(..., description="분류 기준 설명")
+    evidence: EvidenceResponse = Field(..., description="Attention 기반 판단 근거")
 
 
 # ==================== API 엔드포인트 ====================
@@ -189,25 +307,49 @@ async def predict(request: PredictRequest):
         input_ids = encoding["input_ids"].to(device)
         attention_mask = encoding["attention_mask"].to(device)
 
-        # 예측
+        # 예측 (Attention 포함)
         with torch.no_grad():
-            logits = model(input_ids, attention_mask)
+            logits, attentions = model(input_ids, attention_mask, output_attentions=True)
             probabilities = torch.softmax(logits, dim=1)
-            confidence, predicted_class = torch.max(probabilities, dim=1)
 
-        predicted_class = predicted_class.item()
         probs = probabilities[0].tolist()
+        support_prob = probs[0]
+        neutral_prob = probs[1]
+        oppose_prob = probs[2]
+
+        # 스탠스 점수 기반 분류
+        predicted_class, stance_score, stance_clarity = classify_stance(support_prob, oppose_prob)
+        confidence = probs[predicted_class]
+
+        # 분류 근거 설명 생성
+        if predicted_class == 0:  # 옹호
+            reason = f"스탠스 점수 {stance_score:.2f} ≥ {STANCE_THRESHOLD} (옹호 확률 {support_prob:.2f}이 비판 확률 {oppose_prob:.2f}보다 {stance_clarity:.2f} 높음)"
+        elif predicted_class == 2:  # 비판
+            reason = f"스탠스 점수 {stance_score:.2f} ≤ -{STANCE_THRESHOLD} (비판 확률 {oppose_prob:.2f}이 옹호 확률 {support_prob:.2f}보다 {stance_clarity:.2f} 높음)"
+        else:  # 중립
+            reason = f"스탠스 점수 {stance_score:.2f}이 -{STANCE_THRESHOLD} ~ {STANCE_THRESHOLD} 범위 내 (옹호-비판 차이가 {stance_clarity:.2f}로 명확하지 않음)"
+
+        # Attention 기반 판단 근거 추출
+        evidence = extract_attention_evidence(input_ids, attention_mask, attentions, tokenizer)
 
         return PredictResponse(
             stance=STANCE_LABELS[predicted_class],
             stance_kr=STANCE_LABELS_KR[predicted_class],
             stance_id=predicted_class,
-            confidence=round(confidence.item(), 4),
+            confidence=round(confidence, 4),
+            stance_score=round(stance_score, 4),
+            stance_clarity=round(stance_clarity, 4),
             probabilities={
-                "support": round(probs[0], 4),
-                "neutral": round(probs[1], 4),
-                "oppose": round(probs[2], 4),
+                "support": round(support_prob, 4),
+                "neutral": round(neutral_prob, 4),
+                "oppose": round(oppose_prob, 4),
             },
+            classification_reason=reason,
+            evidence=EvidenceResponse(
+                key_words=evidence['key_words'],
+                attention_scores=evidence['attention_scores'],
+                explanation=evidence['explanation']
+            ),
         )
 
     except Exception as e:
@@ -248,26 +390,53 @@ async def predict_batch(request: BatchPredictRequest):
             input_ids = encodings["input_ids"].to(device)
             attention_mask = encodings["attention_mask"].to(device)
 
-            # 예측
+            # 예측 (Attention 포함)
             with torch.no_grad():
-                logits = model(input_ids, attention_mask)
+                logits, attentions = model(input_ids, attention_mask, output_attentions=True)
                 probabilities = torch.softmax(logits, dim=1)
-                confidences, predicted_classes = torch.max(probabilities, dim=1)
 
             # 결과 변환
             for j in range(len(batch_texts)):
-                pred_class = predicted_classes[j].item()
                 probs = probabilities[j].tolist()
+                support_prob = probs[0]
+                neutral_prob = probs[1]
+                oppose_prob = probs[2]
+
+                # 스탠스 점수 기반 분류
+                pred_class, stance_score, stance_clarity = classify_stance(support_prob, oppose_prob)
+                confidence = probs[pred_class]
+
+                # 분류 근거 설명 생성
+                if pred_class == 0:  # 옹호
+                    reason = f"스탠스 점수 {stance_score:.2f} ≥ {STANCE_THRESHOLD} (옹호-비판 차이: {stance_clarity:.2f})"
+                elif pred_class == 2:  # 비판
+                    reason = f"스탠스 점수 {stance_score:.2f} ≤ -{STANCE_THRESHOLD} (비판-옹호 차이: {stance_clarity:.2f})"
+                else:  # 중립
+                    reason = f"스탠스 점수 {stance_score:.2f}이 ±{STANCE_THRESHOLD} 범위 내 (차이: {stance_clarity:.2f})"
+
+                # 개별 샘플의 Attention 추출
+                single_input_ids = input_ids[j:j+1]
+                single_attention_mask = attention_mask[j:j+1]
+                single_attentions = tuple(att[j:j+1] for att in attentions)
+                evidence = extract_attention_evidence(single_input_ids, single_attention_mask, single_attentions, tokenizer)
 
                 results.append({
                     "stance": STANCE_LABELS[pred_class],
                     "stance_kr": STANCE_LABELS_KR[pred_class],
                     "stance_id": pred_class,
-                    "confidence": round(confidences[j].item(), 4),
+                    "confidence": round(confidence, 4),
+                    "stance_score": round(stance_score, 4),
+                    "stance_clarity": round(stance_clarity, 4),
                     "probabilities": {
-                        "support": round(probs[0], 4),
-                        "neutral": round(probs[1], 4),
-                        "oppose": round(probs[2], 4),
+                        "support": round(support_prob, 4),
+                        "neutral": round(neutral_prob, 4),
+                        "oppose": round(oppose_prob, 4),
+                    },
+                    "classification_reason": reason,
+                    "evidence": {
+                        "key_words": evidence['key_words'],
+                        "attention_scores": evidence['attention_scores'],
+                        "explanation": evidence['explanation']
                     },
                 })
 
